@@ -1,0 +1,290 @@
+/* ------------------- truthtable.cpp ------------------------------------
+* Date: 2016.12.25 - 2016.12.27
+* Version: 1.0
+* Author: Billy
+* Description: 离散数学真值表的实现
+* 输入：input.txt 在其中输入若干个可行表达式，每行一个表达式
+* 输出：output.csv 里面包含了真值表
+* --------------------------------------------------------------------*/
+
+
+#include <stdio.h>
+#include <assert.h>
+#include <iostream>
+#include <stack>
+#include <vector>
+#include <regex>
+#include <set>
+
+using std::stack;   using std::vector;  using std::string;
+using std::set;
+using std::cout;    using std::endl;    using std::cin;
+using std::regex; using std::basic_regex; using std::regex_replace;
+string Substitute(string state);
+string TurntoPorland(string state);
+bool Calculate(vector<bool>, string);
+void Display(string);
+void DisplayTruthTable(void);
+void DisplayFormat(string);
+inline bool IsAlpha(char);
+inline bool IsOperator(char);
+
+
+int main()
+{
+  freopen( "input.txt", "r", stdin );
+  freopen( "output.csv", "w", stdout);
+  DisplayTruthTable();
+  return 0;
+}
+
+void DisplayTruthTable(void) {
+  // 初始化
+  string tmp;
+  // 单行读入单行运算
+  while(getline(std::cin,tmp)) {
+    // 匹配及替换
+    string state = Substitute(tmp);
+    // 转化为前序波兰表示
+    string poland = TurntoPorland(state);
+    // 计算表达式的值
+    Display(poland); 
+  }
+/*  // 整体读入整体运算
+  string statement;
+  while(getline(std::cin,tmp))
+  {
+      statement += tmp;
+      statement += '\n';
+  }
+  // 匹配及替换
+  string state = Substitute(statement);
+  // 转化为前序波兰表示
+  string poland = TurntoPorland(state);
+  // 计算表达式的值
+  Display(poland);*/
+}
+void DisplayFormat(string no_space_str) {
+  // 增加空格
+  string beautifulstr;
+  // 和取表达式 &&
+  regex tobesub = basic_regex<char>("&&");
+  string substitutor = " && ";
+  beautifulstr = regex_replace(no_space_str, tobesub, substitutor);
+  // 析取表达式 ||
+  substitutor = " || ";
+  tobesub = basic_regex<char>("\\|\\|");
+  beautifulstr = regex_replace(beautifulstr, tobesub, substitutor);
+  // 等价表达式 ==
+  substitutor = " == ";
+  tobesub = basic_regex<char>("==");
+  beautifulstr = regex_replace(beautifulstr, tobesub, substitutor);
+  // 替换条件表达式 ->
+  substitutor = " -> ";
+  tobesub = basic_regex<char>("->");
+  beautifulstr = regex_replace(beautifulstr, tobesub, substitutor);
+  cout << beautifulstr << endl;
+}
+
+void Display(string poland) {
+  vector<char> singleline_alpha;  // 储存每个字符串中的文字
+  set<char> singleline_alphaset;
+  string singleline_str;  // 储存单个字符串
+  for (int i = 0; i < poland.size(); ++i) {
+    singleline_str.push_back(poland[i]);
+    if (IsAlpha(poland[i])) {
+      singleline_alpha.push_back(poland[i]);
+      singleline_alphaset.insert(poland[i]);
+    }
+    if (poland[i]=='\n' || (i == poland.size()-1) ) {
+      // 输出表头
+      for (set<char>::iterator it = singleline_alphaset.begin();
+        it !=singleline_alphaset.end();
+        it ++) {
+        cout << *it << ",";
+      }
+      cout << "Ans" << endl;
+      // 产生真值表的 2^n 种情况
+      for (int i = 0; i < 1<<singleline_alphaset.size(); ++i) {
+        int gothrough = i;
+        vector<bool> singleline_alphaset_value;
+        // 产生每条情况对应的每个文字的赋值
+        for (int j = 0; j < singleline_alphaset.size(); ++j) {
+          singleline_alphaset_value.push_back( !(gothrough % 2) );
+          cout << !(gothrough % 2) << ",";
+          gothrough /= 2;
+        }
+        // single_alpha对应值相等的都需要赋值,储存在singleline_alpha_value中
+        vector<bool> singleline_alpha_value;
+        vector<bool>::iterator iter_singleline_alphaset_value = singleline_alphaset_value.begin(); 
+        set<char>::iterator iter_singleline_alphaset = singleline_alphaset.begin();
+        vector<char>::iterator iter_singleline_alpha = singleline_alpha.begin();
+        for (;iter_singleline_alpha != singleline_alpha.end();
+         ++iter_singleline_alpha) {
+          // 查找 singleline_alphaset中是否有对应文字
+          for (
+            // * 黄金之句 *
+            iter_singleline_alphaset = singleline_alphaset.begin(),
+            iter_singleline_alphaset_value = singleline_alphaset_value.begin();
+            iter_singleline_alphaset!=singleline_alphaset.end();
+            iter_singleline_alphaset++,iter_singleline_alphaset_value++) {
+            // 如果有对应文字，则给singleline_alpha_value赋上对应于singleline_alphaset_value的值
+            if (*iter_singleline_alphaset == *iter_singleline_alpha) {
+              singleline_alpha_value.push_back(*iter_singleline_alphaset_value);
+              break;
+            }
+          }
+        }
+        cout << Calculate(singleline_alpha_value, singleline_str) << endl;
+      }
+      singleline_alpha.clear();
+      singleline_str.clear();
+      continue;
+    }
+  }
+}
+
+string TurntoPorland(string state) {
+  string poland;
+  stack<char> store;
+  vector<int> virtualalpha;
+  // 第一步
+  char ctemp = state[0];
+  virtualalpha.push_back(0);
+  int len_state = state.size();
+  // 第二步
+  for ( int i = 0; i < len_state; i++ ) {
+    ctemp = state[i];
+    // 第三步
+    if ( ctemp == '\n' ) {  // 换行符
+      poland.push_back(ctemp);
+      assert(store.empty());
+      virtualalpha.pop_back();
+      virtualalpha.push_back(0);  // 黄金之句
+      continue;
+    }
+    else if ( ctemp == '(' ) {
+      virtualalpha.push_back(0);
+      store.push(ctemp);
+    }
+    else if ( ctemp == ')' ) {
+      assert( store.top() == '(' );
+      virtualalpha.pop_back();
+      virtualalpha.back() += 1;
+      store.pop();
+    }
+    else if ( IsAlpha(ctemp) ) {
+      poland.push_back(ctemp);
+      virtualalpha.back() += 1;
+    }
+    else if ( IsOperator(ctemp) ) {
+      store.push(ctemp);
+      continue;
+    }
+    // 第四步
+    while ( !store.empty() ) {
+      char oper = store.top();
+      // 第五步
+      if (oper == '1'){
+        poland.push_back(oper);
+        store.pop();
+      }
+      else if (ctemp=='(' || virtualalpha.back()==1){
+        break;
+      }
+      else if (virtualalpha.back()==2) {
+        poland.push_back(oper);
+        virtualalpha.back() -= 1;
+        store.pop();
+      }// end if
+      else {
+        cout << "error here" ;
+        return poland;
+      }
+    }// end while
+  }// end for
+  // delete &store;
+  return poland;
+}
+
+bool Calculate(vector<bool> value, string str) {
+  bool ans;
+  stack<bool> store;
+  int len_str = str.size();
+  for (int i = 0; i < len_str; ++i) {
+    char ctemp = str[i];
+    if ( IsAlpha(ctemp) ) {
+      store.push(value.front());
+      value.erase(value.begin());
+    }
+    else if ( IsOperator(ctemp) ) {
+      if (ctemp == '1')
+      {
+        store.top() = !store.top();
+      }
+      else if (ctemp == '2') {
+        bool btemp = store.top();
+        store.pop();
+        store.top() = store.top() && btemp;
+      }
+      else if (ctemp == '3' ) {
+        bool btemp = store.top();
+        store.pop();
+        store.top() = store.top() || btemp;
+      }
+      else if (ctemp == '4') {
+        bool btemp = store.top();
+        store.pop();
+        store.top() = store.top() == btemp;
+      }
+      else if (ctemp == '5') {
+        bool btemp = store.top();
+        store.pop();
+        store.top() = !store.top() || btemp;
+      }
+      else {
+        cout << "Error happens in Calculate();";
+        return false;
+      }
+    }
+  }
+  ans = store.top();
+  return ans;
+}
+inline bool IsAlpha(char c) {
+  return ( c >= 65 && c <= 90
+    || c >= 97 && c <= 122 );
+}
+
+inline bool IsOperator(char c) {
+  return ( c >= 48 && c <= 57 );
+}
+
+string Substitute(string state) {
+  // 去掉空格以及制表位
+  std::string substitutor("");
+  regex tobesub("[ \\t]");
+  state = regex_replace(state, tobesub, substitutor);
+  DisplayFormat(state);
+  // 替换否定表达式 ！
+  substitutor = "1";
+  tobesub = basic_regex<char>("!");
+  state = std::regex_replace(state, tobesub, substitutor);
+  // 替换和取表达式 &&
+  substitutor = "2";
+  tobesub = basic_regex<char>("&&");
+  state = regex_replace(state, tobesub, substitutor);
+  // 替换析取表达式 ||
+  substitutor = "3";
+  tobesub = basic_regex<char>("\\|\\|");
+  state = regex_replace(state, tobesub, substitutor);
+  // 替换等价表达式 ==
+  substitutor = "4";
+  tobesub = basic_regex<char>("==");
+  state = regex_replace(state, tobesub, substitutor);
+  // 替换条件表达式 =
+  substitutor = "5";
+  tobesub = basic_regex<char>("->");
+  state = regex_replace(state, tobesub, substitutor);
+  return state;
+}
